@@ -38,6 +38,7 @@ struct thermal_data {
 	struct thermal_handler *th;
 };
 
+
 static struct thermal_zone *event_tz_find(struct thermal_data *td, int tz_id)
 {
 	struct thermal_zone *tz;
