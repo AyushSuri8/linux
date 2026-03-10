@@ -10,9 +10,9 @@ differences occur, report the file and commits that need to be updated.
 
 The usage is as follows:
 - tools/docs/checktransupdate.py -l zh_CN
-  This will print all the files that need to be updated or translated in the zh_CN locale.
+This will print all the files that need to be updated or translated in the zh_CN locale.
 - tools/docs/checktransupdate.py Documentation/translations/zh_CN/dev-tools/testing-overview.rst
-  This will only print the status of the specified file.
+This will only print the status of the specified file.
 
 The output is something like:
 Documentation/dev-tools/kfence.rst
