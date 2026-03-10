@@ -38,6 +38,30 @@ struct thermal_data {
 	struct thermal_handler *th;
 };
 
+static struct thermal_zone *event_tz_find(struct thermal_data *td, int tz_id)
+{
+	struct thermal_zone *tz;
+
+	tz = thermal_zone_find_by_id(td->tz, tz_id);
+	if (!tz)
+		ERROR("Thermal zone id=%d not found\n", tz_id);
+
+	return tz;
+}
+
+static struct thermal_trip *event_trip_find(struct thermal_zone *tz, int trip_id)
+{
+	struct thermal_trip *trip;
+
+	for (trip = tz->trip; trip && trip->id != -1; trip++) {
+		if (trip->id == trip_id)
+			return trip;
+	}
+
+	ERROR("Thermal zone '%s' has no trip id=%d\n", tz->name, trip_id);
+	return NULL;
+}
+
 static int show_threshold(struct thermal_threshold *th, __maybe_unused void *arg)
 {
 	INFO("threshold temp=%d, direction=%d\n",
@@ -128,7 +152,10 @@ static int tz_delete(int tz_id, __maybe_unused void *arg)
 static int tz_disable(int tz_id, void *arg)
 {
 	struct thermal_data *td = arg;
-	struct thermal_zone *tz = thermal_zone_find_by_id(td->tz, tz_id);
+	struct thermal_zone *tz = event_tz_find(td, tz_id);
+
+	if (!tz)
+		return -1;
 
 	INFO("Thermal zone %d ('%s') disabled\n", tz_id, tz->name);
 
@@ -138,7 +165,10 @@ static int tz_disable(int tz_id, void *arg)
 static int tz_enable(int tz_id, void *arg)
 {
 	struct thermal_data *td = arg;
-	struct thermal_zone *tz = thermal_zone_find_by_id(td->tz, tz_id);
+	struct thermal_zone *tz = event_tz_find(td, tz_id);
+
+	if (!tz)
+		return -1;
 
 	INFO("Thermal zone %d ('%s') enabled\n", tz_id, tz->name);
 
@@ -148,7 +178,10 @@ static int tz_enable(int tz_id, void *arg)
 static int trip_high(int tz_id, int trip_id, int temp, void *arg)
 {
 	struct thermal_data *td = arg;
-	struct thermal_zone *tz = thermal_zone_find_by_id(td->tz, tz_id);
+	struct thermal_zone *tz = event_tz_find(td, tz_id);
+
+	if (!tz)
+		return -1;
 
 	INFO("Thermal zone %d ('%s'): trip point %d crossed way up with %d °C\n",
 	     tz_id, tz->name, trip_id, temp);
@@ -159,7 +192,10 @@ static int trip_high(int tz_id, int trip_id, int temp, void *arg)
 static int trip_low(int tz_id, int trip_id, int temp, void *arg)
 {
 	struct thermal_data *td = arg;
-	struct thermal_zone *tz = thermal_zone_find_by_id(td->tz, tz_id);
+	struct thermal_zone *tz = event_tz_find(td, tz_id);
+
+	if (!tz)
+		return -1;
 
 	INFO("Thermal zone %d ('%s'): trip point %d crossed way down with %d °C\n",
 	     tz_id, tz->name, trip_id, temp);
@@ -186,14 +222,22 @@ static int trip_change(int tz_id, int trip_id, int type, int temp,
 		       int hyst, __maybe_unused void *arg)
 {
 	struct thermal_data *td = arg;
-	struct thermal_zone *tz = thermal_zone_find_by_id(td->tz, tz_id);
+	struct thermal_zone *tz = event_tz_find(td, tz_id);
+	struct thermal_trip *trip;
+
+	if (!tz)
+		return -1;
+
+	trip = event_trip_find(tz, trip_id);
+	if (!trip)
+		return -1;
 
 	INFO("Trip point changed %d: id=%d, type=%d, temp=%d, hyst=%d\n",
 	     tz_id, trip_id, type, temp, hyst);
 
-	tz->trip[trip_id].type = type;
-	tz->trip[trip_id].temp = temp;
-	tz->trip[trip_id].hyst = hyst;
+	trip->type = type;
+	trip->temp = temp;
+	trip->hyst = hyst;
 
 	return 0;
 }
@@ -222,11 +266,14 @@ static int cdev_update(int cdev_id, int cur_state, __maybe_unused void *arg)
 static int gov_change(int tz_id, const char *name, __maybe_unused void *arg)
 {
 	struct thermal_data *td = arg;
-	struct thermal_zone *tz = thermal_zone_find_by_id(td->tz, tz_id);
+	struct thermal_zone *tz = event_tz_find(td, tz_id);
+
+	if (!tz)
+		return -1;
 
 	INFO("%s: governor changed %s -> %s\n", tz->name, tz->governor, name);
 
-	strcpy(tz->governor, name);
+	snprintf(tz->governor, sizeof(tz->governor), "%s", name);
 
 	return 0;
 }
