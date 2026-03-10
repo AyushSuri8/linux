@@ -204,7 +204,7 @@ static int options_init(int argc, char *argv[], struct options *options)
 		{ "loglevel",	required_argument, NULL, 'l' },
 		{ "postfix",	required_argument, NULL, 'p' },
 		{ "output",	required_argument, NULL, 'o' },
-		{ "syslog",	required_argument, NULL, 's' },
+		{ "syslog",	no_argument, NULL, 's' },
 		{ "overwrite",	no_argument, NULL, 'w' },
 		{ 0, 0, 0, 0 }
 	};
@@ -234,10 +234,18 @@ static int options_init(int argc, char *argv[], struct options *options)
 			usage(basename(argv[0]));
 			break;
 		case 'p':
-			strcpy(options->postfix, optarg);
+			if (snprintf(options->postfix, sizeof(options->postfix), "%s", optarg) >=
+			    sizeof(options->postfix)) {
+				ERROR("Postfix is too long\n");
+				return -1;
+			}
 			break;
 		case 'o':
-			strcpy(options->output, optarg);
+			if (snprintf(options->output, sizeof(options->output), "%s", optarg) >=
+			    sizeof(options->output)) {
+				ERROR("Output path is too long\n");
+				return -1;
+			}
 			break;
 		case 's':
 			options->logopt = TO_SYSLOG;
@@ -261,7 +269,11 @@ static int thermometer_add_tz(const char *path, const char *name, int polling,
 	char tz_path[PATH_MAX];
 	struct tz *tz;
 
-	sprintf(tz_path, CLASS_THERMAL"/%s/temp", path);
+	if (snprintf(tz_path, sizeof(tz_path), CLASS_THERMAL"/%s/temp", path) >=
+	    sizeof(tz_path)) {
+		ERROR("Thermal zone path is too long for %s\n", path);
+		return -1;
+	}
 
 	fd = open(tz_path, O_RDONLY);
 	if (fd < 0) {
@@ -272,6 +284,7 @@ static int thermometer_add_tz(const char *path, const char *name, int polling,
 	tz = realloc(thermometer->tz, sizeof(*thermometer->tz) * (thermometer->nr_tz + 1));
 	if (!tz) {
 		ERROR("Failed to allocate thermometer->tz\n");
+		close(fd);
 		return -1;
 	}
 
@@ -313,7 +326,11 @@ static int thermometer_init(struct configuration *config,
 		if (strncmp(dirent->d_name, tz_dirname, strlen(tz_dirname)))
 			continue;
 
-		sprintf(tz_path, CLASS_THERMAL"/%s/type", dirent->d_name);
+		if (snprintf(tz_path, sizeof(tz_path), CLASS_THERMAL"/%s/type",
+			     dirent->d_name) >= sizeof(tz_path)) {
+			ERROR("Thermal zone path is too long for %s\n", dirent->d_name);
+			continue;
+		}
 
 		tz_file = fopen(tz_path, "r");
 		if (!tz_file) {
@@ -321,9 +338,15 @@ static int thermometer_init(struct configuration *config,
 			continue;
 		}
 
-		fscanf(tz_file, "%s", tz_type);
+		if (!fgets(tz_type, sizeof(tz_type), tz_file)) {
+			ERROR("Failed to read thermal zone type from %s\n", tz_path);
+			fclose(tz_file);
+			continue;
+		}
 
 		fclose(tz_file);
+
+		tz_type[strcspn(tz_type, "\n")] = '\0';
 
 		tz_regex = configuration_tz_match(tz_type, config);
 		if (!tz_regex)
